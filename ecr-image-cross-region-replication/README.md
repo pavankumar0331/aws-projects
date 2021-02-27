@@ -8,13 +8,13 @@ The main objective or intent for building the solution is to copy the ecr images
     2. Highly redundent.
 
 # Background
-This end to end solution leverages the below listed aws services.
-    1. AWS CodeBuild
-    2. ECR
-    3. SQS
-    4. Lambda
-    5. S3
-    6. Cloudwatch event. 
+This end to end solution leverages the below listed aws services. <br />
+    1. AWS CodeBuild <br />
+    2. ECR <br />
+    3. SQS <br />
+    4. Lambda <br />
+    5. S3 <br />
+    6. Cloudwatch event. <br />
 
 # How this solution works??
 To begin with, you should decide which ecr repository images that you would want to copy from one region to another region.
@@ -46,8 +46,8 @@ aws s3 --region <REGION> cp buildspec.yml s3://cross-region-ecr-replication-proj
 
 Step2: Run the following command to deploy cloudformation stack.
 Note:
-  Set region value by replacing <REGION>. Make sure deploy s3 bucket and CF stack in the same region.
-  Set stackname by replacing <StackName>.
+    Set region value by replacing <REGION>. Make sure deploy s3 bucket and CF stack in the same region.
+    Set stackname by replacing <StackName>.
   Replace <ECRRepoName> with ecr reponame that you want to replicate.
   Replace <Destregion> with aws ecr region. this sould be the region where your ecr images would be replicated to.
   Replace <BUCKETNAME> with the name that you gave in step1.
