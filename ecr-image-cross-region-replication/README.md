@@ -48,11 +48,11 @@ Step2: Run the following command to deploy cloudformation stack. <br />
 Note: <br />
     1. Set region value by replacing 'REGION'. Make sure deploy s3 bucket and CF stack in the same region. <br />
     2. Set stackname by replacing 'StackName'. <br />
-    3. Replace "ECRRepoName" with ecr reponame that you want to replicate. <br />
-    4. Replace "Destregion" with aws ecr region. this sould be the region where your ecr images would be replicated to. <br />
+    3. Replace "ECR_REPO_NAME" with ecr reponame that you want to replicate. <br />
+    4. Replace "DEST_REGION" with aws ecr region. this sould be the region where your ecr images would be replicated to. <br />
     4. Replace "BUCKETNAME" with the name that you gave in step1. <br />
   
-aws --region 'REGION' cloudformation create-stack --stack-name 'StackName' --template-body file://cross-region-image-copy-template.yaml --capabilities CAPABILITY_NAMED_IAM --parameters '[{"ParameterKey": "ECRRepoName", "ParameterValue": "ECRRepoName"}, {"ParameterKey": "Destregion", "ParameterValue": "Destregion"}, {"ParameterKey": "BucketName", "ParameterValue": "BUCKETNAME"}]'
+aws --region 'REGION' cloudformation create-stack --stack-name 'StackName' --template-body file://cross-region-image-copy-template.yaml --capabilities CAPABILITY_NAMED_IAM --parameters '[{"ParameterKey": "ECRRepoName", "ParameterValue": "ECR_REPO_NAME"}, {"ParameterKey": "Destregion", "ParameterValue": "DEST_REGION"}, {"ParameterKey": "BucketName", "ParameterValue": "BUCKETNAME"}]'
 
 
 
