@@ -38,21 +38,21 @@ Follow along to deploy this solution.
 
 Step1: Run the following command to create an s3 bucket and to copy the buildspec file to input folder.
 Note: <br />
-    1. Give name to bucket by replacing <BUCKETNAME> <br />
-    2. set region value by replacing <REGION> <br />
+    1. Give name to bucket by replacing 'BUCKETNAME' <br />
+    2. set region value by replacing 'REGION' <br />
   
-aws s3 mb s3://<BUCKETNAME>/ <br />
-aws s3 --region <REGION> cp buildspec.yml s3://cross-region-ecr-replication-project-input-store/input/buildspec.yml <br />
+aws s3 mb s3://'BUCKETNAME'/ <br />
+aws s3 --region 'REGION' cp buildspec.yml s3://cross-region-ecr-replication-project-input-store/input/buildspec.yml <br />
 
 Step2: Run the following command to deploy cloudformation stack. <br />
 Note: <br />
-    1. Set region value by replacing <REGION>. Make sure deploy s3 bucket and CF stack in the same region. <br />
-    2. Set stackname by replacing <StackName>. <br />
-    3. Replace <ECRRepoName> with ecr reponame that you want to replicate. <br />
-    4. Replace <Destregion> with aws ecr region. this sould be the region where your ecr images would be replicated to. <br />
-    4. Replace <BUCKETNAME> with the name that you gave in step1. <br />
+    1. Set region value by replacing 'REGION'. Make sure deploy s3 bucket and CF stack in the same region. <br />
+    2. Set stackname by replacing 'StackName'. <br />
+    3. Replace "ECRRepoName" with ecr reponame that you want to replicate. <br />
+    4. Replace "Destregion" with aws ecr region. this sould be the region where your ecr images would be replicated to. <br />
+    4. Replace "BUCKETNAME" with the name that you gave in step1. <br />
   
-aws --region <REGION> cloudformation create-stack --stack-name <StackName> --template-body file://cross-region-image-copy-template.yaml --capabilities CAPABILITY_NAMED_IAM --parameters '[{"ParameterKey": "ECRRepoName", "ParameterValue": "<ECRRepoName>"}, {"ParameterKey": "Destregion", "ParameterValue": "<Destregion>"}, {"ParameterKey": "BucketName", "ParameterValue": "<BUCKETNAME>"}]'
+aws --region 'REGION' cloudformation create-stack --stack-name 'StackName' --template-body file://cross-region-image-copy-template.yaml --capabilities CAPABILITY_NAMED_IAM --parameters '[{"ParameterKey": "ECRRepoName", "ParameterValue": "ECRRepoName"}, {"ParameterKey": "Destregion", "ParameterValue": "Destregion"}, {"ParameterKey": "BucketName", "ParameterValue": "BUCKETNAME"}]'
 
 
 
