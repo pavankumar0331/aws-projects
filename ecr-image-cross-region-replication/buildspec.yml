@@ -1,0 +1,38 @@
+version: 0.2
+
+phases:
+  install:
+    #If you use the Ubuntu standard image 2.0 or later, you must specify runtime-versions.
+    #If you specify runtime-versions and use an image other than Ubuntu standard image 2.0, the build fails.
+    runtime-versions:
+       python: 3.8
+    commands:
+       - echo "installing aws cli"
+       - apt-get -y update
+       - apt-get -y install awscli
+  pre_build:
+    commands:
+       - echo "creating ecr repository for storing images if not exists!!"
+       - aws ecr --region $dest_region create-repository --repository-name $reponame 2>/dev/null || echo "registry with the same name already exists"
+       - echo "Finding AccountId form buildarn"
+       - AccountId=`echo $CODEBUILD_BUILD_ARN | awk -F ':' '{print $5}'`
+       - echo "Constructing ECR Source Registry Path"
+       - ECR_Src_Repo_Path="$AccountId.dkr.ecr.$AWS_REGION.amazonaws.com"
+  build:
+    commands:
+       - echo "logging into the source ecr registry"
+       - $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
+       - echo "downloading the image"
+       - docker pull $ECR_Src_Repo_Path/$reponame:$imagename
+       - echo "list all the images"
+       - docker images
+  post_build:
+    commands:
+       - echo "logging into the destination ecr registry"
+       - $(aws ecr get-login --no-include-email --region $dest_region)
+       - echo "Constructing ECR Dest Registry Path"
+       - ECR_Dest_Repo_Path="$AccountId.dkr.ecr.$dest_region.amazonaws.com"
+       - echo "tagging image to push to dest ecr repo"
+       - docker tag $ECR_Src_Repo_Path/$reponame:$imagename $ECR_Dest_Repo_Path/$reponame:$imagename
+       - echo "Push image to dest ecr registry"
+       - docker push $ECR_Dest_Repo_Path/$reponame:$imagename 

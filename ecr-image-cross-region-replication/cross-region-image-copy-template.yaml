@@ -1,0 +1,248 @@
+Parameters:
+    ECRRepoName:
+      Description: Name of the ECR Repository
+      Type: String
+    Destregion:
+      Description: name of the destination region.
+      Type: String
+    BucketName:
+      Description: name of the bucket to act as source as well as store output artifacts.
+      Type: String
+      
+Resources:
+    ##CW_EVENT
+    ECRCWEventRule:
+      Type: AWS::Events::Rule
+      Properties:
+        Description: 
+           Fn::Sub: "CW Event rule trigger the Stand FIFO Queue when ever image is pushed to the ${ECRRepoName} repo"
+        Name: "ecr_repo_push_image_event_monitor_rule"
+        State: ENABLED
+        Targets:
+          - Arn: 
+              Fn::GetAtt: ["SQSQueue", "Arn"]
+            Id: "queue"
+            SqsParameters: 
+              MessageGroupId: "ecreventstore"
+        EventPattern: 
+            source: 
+              - "aws.ecr"
+            detail-type:
+              - "ECR Image Action"
+            detail:
+              action-type:
+                - "PUSH"
+              result:
+                - "SUCCESS"
+              repository-name:
+                - Ref: ECRRepoName
+                
+    ##SQS_QUEUE
+    SQSQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+         FifoQueue: "ecr_repo_push_image_event_monitor_store.fifo"
+         VisibilityTimeout: 30
+         ContentBasedDeduplication: true
+         FifoQueue: true
+    
+    ##CodeBuild Iam Role
+    CodeBuildIamRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: "cross_region_replication_ecr_codebuild_role"
+        Description: "An Iam role will be assumed by codebuild project to get permissions for copying the ecr image to destination region"
+        AssumeRolePolicyDocument:
+           Version: "2012-10-17"
+           Statement:
+            - Effect: Allow
+              Action: sts:AssumeRole
+              Principal:
+                Service: codebuild.amazonaws.com
+        Policies:
+          - PolicyName: "cross_region_replication_ecr_codebuild_role_policy"  
+            PolicyDocument: 
+               Version: 2012-10-17
+               Statement:
+                  - Effect: Allow
+                    Action: 
+                      - "logs:CreateLogGroup"
+                      - "logs:CreateLogStream"
+                      - "logs:PutLogEvents"
+                      - "s3:*"
+                      - "codecommit:GitPull"
+                      - "ecr:*"
+                    Resource: "*"  
+    
+    ###CodeBuildProject
+    CRRCodeBuildProject:
+        Type: AWS::CodeBuild::Project
+        Properties:
+           Description: "Project to clone ecr image from source region and copies to mentioned destination region"
+           ServiceRole: 
+              Fn::GetAtt: ["CodeBuildIamRole", "Arn"]
+           Source:
+             Type: S3
+             SourceIdentifier: "input"
+             Location: 
+               Fn::Sub: "${BucketName}/input/"
+           Artifacts:
+             Type: "NO_ARTIFACTS" 
+           Name: "cross_region_ecr_image_replication_project"
+           Environment:
+              ComputeType: "BUILD_GENERAL1_SMALL"
+              Image: "aws/codebuild/standard:3.0"
+              PrivilegedMode: true
+              Type: "LINUX_CONTAINER"
+              EnvironmentVariables:
+                 - Name: dest_region
+                   Type: PLAINTEXT
+                   Value: 
+                      Ref: Destregion
+                 - Name: reponame
+                   Type: PLAINTEXT
+                   Value: 
+                      Ref: ECRRepoName
+                 - Name: imagename
+                   Type: PLAINTEXT
+                   Value: "REPLACED"
+    
+    ##Lambda role
+    Triggercodebuildlambdarole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: "crr_ecr_invoke_cb_role"
+        Description: "An Iam role will be assumed by lambda to get permissions for invoking build project"
+        AssumeRolePolicyDocument:
+           Version: "2012-10-17"
+           Statement:
+            - Effect: Allow
+              Action: sts:AssumeRole
+              Principal:
+                Service: lambda.amazonaws.com
+        Policies:
+          - PolicyName: "crr_ecr_invoke_cb_role_policy"  
+            PolicyDocument: 
+               Version: 2012-10-17
+               Statement:
+                  - Effect: Allow
+                    Action:
+                      - "codebuild:StartBuild"
+                      - "sqs:GetQueueUrl"
+                      - "sqs:ReceiveMessage"
+                      - "sqs:GetQueueAttributes"
+                      - "sqs:DeleteMessage"
+                      - "logs:CreateLogGroup"
+                      - "logs:CreateLogStream"
+                      - "logs:PutLogEvents"
+                    Resource: "*"  
+    
+    ##Lambda
+    Triggercodebuildlambda:
+      Type: AWS::Lambda::Function
+      Properties:
+        FunctionName: "crr_ecr_invoke_cb_function"
+        Description: "Function to trigger the crr ecr codebuild"
+        Runtime: "nodejs12.x"
+        Role: 
+         Fn::GetAtt: ["Triggercodebuildlambdarole", "Arn"]
+        Handler: "index.handler"
+        Code:
+           ZipFile: |
+                "use strict";
+                //Loading AWS SDK Module
+                const AWS = require('aws-sdk');
+                
+                //getting region from environment variable and store in region
+                var Region = process.env.AWS_REGION;
+                
+                //updating AWS config with the region
+                AWS.config.update({"Region": Region});
+                
+                //creating connection to sqs
+                var sqs = new AWS.SQS({apiVersion: '2012-11-15'});
+                var codebuild = new AWS.CodeBuild({apiVersion: '2016-10-06'});
+                
+                exports.handler = async (event) => {
+                    console.log(typeof event);
+                    console.log("event");
+                    console.log(event);
+                    // return "Hello";
+                    console.log("converting json encoded string to json object....!!!");
+                    // // var converted_input = JSON.parse(event);
+                    // // var event_input = converted_input;
+                    var event_input = event;
+                    var queue_body = JSON.parse(event_input.Records[0].body);
+                    // console.log("success");
+                    console.log(typeof queue_body);
+                    console.log(queue_body);
+                    
+                    var ecr_repo_name = queue_body['detail']['repository-name'];
+                    console.log("ecr_repo_name");
+                    console.log(ecr_repo_name);
+                    
+                    var image_name = queue_body['detail']['image-tag'];
+                    console.log("imagetag");
+                    console.log(image_name);
+                    
+                    console.log("deleting the message from Queue!!!");
+                    var sqs_queue_arn = event_input.Records[0].eventSourceARN;
+                    var sqs_queue_name = sqs_queue_arn.split(":")[5];
+                    console.log("queuename");
+                    console.log(sqs_queue_name);
+                    var sqs_queue_accountid = sqs_queue_arn.split(":")[4];
+                    console.log("AccountId");
+                    console.log(sqs_queue_accountid);
+                    
+                    //task1: to delete message from queue we need queue-url. below code helps to get the queue url
+                    var params = {
+                        QueueName: sqs_queue_name
+                        // QueueOwnerAWSAccountId: sqs_queue_accountid
+                    };
+                    var queue_info =  await sqs.getQueueUrl(params).promise();
+                    console.log(queue_info['QueueUrl']);
+                    
+                    //task2: delete the message from the queue
+                    var queue_params = {
+                        QueueUrl: queue_info['QueueUrl'],
+                        ReceiptHandle: event_input.Records[0].receiptHandle 
+                    };
+                    var del_msg_response =  await sqs.deleteMessage(queue_params).promise();
+                    console.log(del_msg_response);
+                    
+                    //task3: invoke codebuild project by passing imagename as environment variable
+                    var codebuild_project_params = {
+                        projectName: process.env.ProjectName,
+                        environmentVariablesOverride: [
+                            {
+                              name: 'imagename', 
+                              value: image_name,
+                              type: "PLAINTEXT"
+                            }
+                        ]
+                    };
+                    var build_res = await codebuild.startBuild(codebuild_project_params).promise();
+                    console.log(build_res);
+                    
+                    const response = {
+                        statusCode: 200,
+                        body: JSON.stringify('Task completed'),
+                    };
+                    return response;
+                };
+        Environment: 
+          Variables: 
+            ProjectName: 
+              Ref: CRRCodeBuildProject
+    
+    # ##Add lambda permissions
+    SQStoLambda:
+      Type: "AWS::Lambda::EventSourceMapping"
+      Properties:
+        Enabled: true
+        FunctionName: 
+          Fn::GetAtt: ["Triggercodebuildlambda", "Arn"]
+        EventSourceArn: 
+          Fn::GetAtt: ["SQSQueue", "Arn"]
+          
+          
